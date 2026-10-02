@@ -4697,74 +4697,47 @@
       white-space: nowrap;
     }
 
-    .business-head-count {
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: var(--text-sub);
-      background: rgba(0, 0, 0, 0.05);
-      border: 1px solid rgba(0, 0, 0, 0.06);
-      border-radius: 7px;
-      padding: 2px 8px;
-      font-family: var(--font-tech);
-      margin-left: 2px;
-    }
-
-    /* 一键清空所有待办 */
-    .todo-clear-all-btn {
-      align-self: center;
-      height: 32px;
-      padding: 0 14px;
+    /* 待办子页内的一键清空（只清空当前资产） */
+    .todo-clear-btn {
+      height: 28px;
+      padding: 0 12px;
       border: none;
       border-radius: 8px;
       background: rgba(214, 48, 49, 0.08);
       color: #d63031;
-      font-size: 0.8rem;
+      font-size: 0.76rem;
       font-weight: 600;
       font-family: var(--font-tech);
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       cursor: pointer;
+      flex-shrink: 0;
       transition: background 0.2s ease, transform 0.1s ease;
       white-space: nowrap;
     }
 
-    .todo-clear-all-btn:hover:not(:disabled) {
+    .todo-clear-btn:hover:not(:disabled) {
       background: rgba(214, 48, 49, 0.18);
     }
 
-    .todo-clear-all-btn:active:not(:disabled) {
+    .todo-clear-btn:active:not(:disabled) {
       transform: scale(0.96);
     }
 
-    .todo-clear-all-btn:disabled {
-      opacity: 0.45;
+    .todo-clear-btn:disabled {
+      opacity: 0.4;
       cursor: not-allowed;
     }
 
-    .todo-clear-all-btn i {
-      font-size: 1rem;
+    .todo-clear-btn i {
+      font-size: 0.95rem;
       line-height: 1;
     }
 
-    .todo-clear-all-count {
-      font-size: 0.72rem;
-      font-weight: 700;
-      background: rgba(255, 255, 255, 0.65);
-      border-radius: 6px;
-      padding: 1px 6px;
-      min-width: 18px;
-      text-align: center;
-    }
-
     @media (max-width: 700px) {
-      .business-head {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .todo-clear-all-btn {
-        justify-content: center;
+      .todo-clear-btn {
+        padding: 0 9px;
       }
     }
 
@@ -11113,31 +11086,23 @@ ${CHARACTER_PROFILE_FORMAT_SAMPLE.trim()}
           });
       };
 
-      // 待办事件：一键清空全部资产的待办
-      window.clearAllAssetTodos = () => {
+      // 待办事件：一键清空「当前资产」的全部待办（按钮位于该资产的待办子页内）
+      window.clearAssetTodos = (assetName) => {
+        if (!assetName) return;
         const data = fetchLatestMvuData();
-        const assets = data?.核心资产;
-        if (!assets || typeof assets !== 'object') return;
-
-        const targetNames = Object.keys(assets).filter(name => {
-          const list = assets[name]?.待办事件;
-          return Array.isArray(list) && list.length > 0;
-        });
-        if (targetNames.length === 0) {
-          showBattleWarning('当前没有待办事项');
+        const list = data?.核心资产?.[assetName]?.待办事件;
+        if (!Array.isArray(list) || list.length === 0) {
+          showBattleWarning('该资产当前没有待办事项');
           return;
         }
-        const totalCount = targetNames.reduce((sum, name) => sum + assets[name].待办事件.length, 0);
+        const count = list.length;
 
-        showBattleConfirm(`确定一键清空全部资产的 ${totalCount} 条待办事项吗？`, { title: '清空确认', okText: '确认清空', cancelText: '取消' })
+        showBattleConfirm(`确定清空「${assetName}」的 ${count} 条待办事项吗？`, { title: '清空确认', okText: '确认清空', cancelText: '取消' })
           .then((confirmed) => {
             if (!confirmed) return;
-            const patches = targetNames.map(name => ({
-              op: 'replace',
-              path: `/核心资产/${name}/待办事件`,
-              value: []
-            }));
-            const success = applyMvuPatches(patches);
+            const success = applyMvuPatches([
+              { op: 'replace', path: `/核心资产/${assetName}/待办事件`, value: [] }
+            ]);
             if (success) {
               _cachedData = null;
               setTimeout(refresh, 100);
@@ -12577,8 +12542,16 @@ ${CHARACTER_PROFILE_FORMAT_SAMPLE.trim()}
                   </div>
                   <div class="biz-sub-pane${activePane === 'todo' ? ' active' : ''}" data-pane="todo">
                     <div class="module-header">
-                      <span class="module-title"><i class="ri-notification-3-line"></i>待办事件</span>
-                      <span class="module-count${todoList.length > 0 ? ' warn' : ''}">${todoList.length}</span>
+                      <span class="module-title"><i class="ri-notification-3-line"></i>待办事件<span class="module-count${todoList.length > 0 ? ' warn' : ''}">${todoList.length}</span></span>
+                      <button
+                        class="todo-clear-btn"
+                        type="button"
+                        data-clear-asset-todo="${escapeAttr(assetName)}"
+                        title="清空该资产的全部待办事件"
+                        ${todoList.length > 0 ? '' : 'disabled'}
+                      >
+                        <i class="ri-delete-bin-6-line"></i>一键清空
+                      </button>
                     </div>
                     ${todoHtml}
                   </div>
@@ -12587,18 +12560,7 @@ ${CHARACTER_PROFILE_FORMAT_SAMPLE.trim()}
             </div>`;
           });
 
-          const totalTodoCount = assetEntries.reduce((sum, [, asset]) => {
-            const list = Array.isArray(asset?.待办事件) ? asset.待办事件 : [];
-            return sum + list.length;
-          }, 0);
-
           businessContent = `<div class="business-section">
-            <div class="business-head">
-              <div class="business-head-title"><i class="ri-store-2-line"></i>核心资产<span class="business-head-count">${assetEntries.length}</span></div>
-              <button class="todo-clear-all-btn" type="button"${totalTodoCount > 0 ? '' : ' disabled'} title="清空所有资产的待办事件">
-                <i class="ri-delete-bin-6-line"></i>一键清空所有待办<span class="todo-clear-all-count">${totalTodoCount}</span>
-              </button>
-            </div>
             <div class="business-asset-list">${cardsHTML}</div>
           </div>`;
         } else {
@@ -13441,11 +13403,13 @@ ${CHARACTER_PROFILE_FORMAT_SAMPLE.trim()}
             if (name) window.renameBusinessAsset(name);
           });
         });
-        document.querySelectorAll('.todo-clear-all-btn').forEach(el => {
+        document.querySelectorAll('.todo-clear-btn[data-clear-asset-todo]').forEach(el => {
           el.addEventListener('click', function (e) {
             e.stopPropagation();
             if (this.disabled) return;
-            window.clearAllAssetTodos();
+            const assetName = this.dataset.clearAssetTodo || '';
+            if (!assetName) return;
+            window.clearAssetTodos(assetName);
           });
         });
         document.querySelectorAll('.todo-delete-btn[data-asset-name]').forEach(el => {
